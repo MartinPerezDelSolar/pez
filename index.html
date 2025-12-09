@@ -36,154 +36,173 @@
 /* -----------------------------
    CARGA DE IMÁGENES
 --------------------------------*/
-const pez=new Image();
-const brillo=new Image();
-const aleta=new Image();
+const pez    = new Image();
+const brillo = new Image();
+const aleta  = new Image();
 
-pez.src="peces/pezprincipal.png";
-brillo.src="peces/pezbrillo.png";
-aleta.src="peces/pezaleta.png";
+pez.src    = "peces/pezprincipal.png";
+brillo.src = "peces/pezbrillo.png";
+aleta.src  = "peces/pezaleta.png";
 
-let loaded=0;
-[pez,brillo,aleta].forEach(im=>{
-  im.onload=()=>{
+let loaded = 0;
+[pez, brillo, aleta].forEach(img => {
+  img.onload = () => {
     loaded++;
-    if(loaded===3){
+    if (loaded === 3) {
       setupFish();
       initState();
       start();
-      window.addEventListener("resize",setupFish);
+      window.addEventListener("resize", setupFish);
     }
-  }
+  };
 });
 
 /* -----------------------------
    LIENZO DEL PEZ
 --------------------------------*/
-let canvas,ctx;
-let fishWidth,fishHeight,scaleFactor;
+let canvas, ctx;
+let fishWidth, fishHeight, scaleFactor;
 
 function setupFish(){
-  if(!canvas){
-    canvas=document.createElement("canvas");
-    ctx=canvas.getContext("2d");
-    document.getElementById("fish-wrapper").appendChild(canvas);
+  const wrapper = document.getElementById("fish-wrapper");
+
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    ctx = canvas.getContext("2d");
+    wrapper.appendChild(canvas);
   }
 
-  // MISMO TAMAÑO SIEMPRE
-  const scale=0.25;
+  // 🔹 tamaño base
+  let scale = 0.25;
 
-  fishWidth=window.innerWidth*scale;
-  fishHeight=fishWidth*(pez.height/pez.width);
+  // 🔹 en iPhone / iPad → el doble
+  const ua = navigator.userAgent || navigator.vendor || "";
+  const isiOS = /iPhone|iPad|iPod/i.test(ua);
+  if (isiOS) {
+    scale = 0.5;
+  }
 
-  canvas.width=fishWidth;
-  canvas.height=fishHeight;
+  fishWidth  = window.innerWidth * scale;
+  fishHeight = fishWidth * (pez.height / pez.width);
 
-  scaleFactor=fishWidth/pez.width;
+  canvas.width  = fishWidth;
+  canvas.height = fishHeight;
+
+  scaleFactor = fishWidth / pez.width;
 
   drawFish();
+  updateFishWrapper();
 }
 
 /* -----------------------------
-   ESTADO GLOBAL
+   ESTADOS GLOBALES
 --------------------------------*/
-let time=0;
-let last=null;
+let time = 0;
+let last = null;
 
-let xPos=0.3;
-let horiz="drift"; 
-let leftTarget=0.2;
-let rightTarget=0.9;
-let swimT=0;
-let swimDur=10;
-let swimStart=0.9;
-let swimEnd=0.2;
+/* Posición horizontal */
+let xPos = 0.3;
+let horiz = "drift";
+let leftTarget  = 0.2;
+let rightTarget = 0.9;
+let swimT   = 0;
+let swimDur = 10;
+let swimStart = 0.9;
+let swimEnd   = 0.2;
 
-let yPos=0.5;
-let yState="rest";
-let yTimer=0;
-let yDur=5;
-let yStart=0.5;
-let yEnd=0.5;
+/* Posición vertical */
+let yPos   = 0.5;
+let yState = "rest";
+let yTimer = 0;
+let yDur   = 5;
+let yStart = 0.5;
+let yEnd   = 0.5;
 
 /* Cola */
-const TAIL_SLOW=0.16;
-const TAIL_FAST=0.32;
-let tailFreq=TAIL_SLOW;
-let tailFreqTarget=TAIL_SLOW;
-let tailPhase=0;
-let tailScale=1;
+const TAIL_SLOW = 0.16;
+const TAIL_FAST = 0.32;
+let tailFreq       = TAIL_SLOW;
+let tailFreqTarget = TAIL_SLOW;
+let tailPhase = 0;
+let tailScale = 1;
 
 /* Brillo */
-let glowMode="low";
-let glowVal=0.4;
-let glowStart=0;
-let glowDur=10;
-let glowOsc=0;
-let glowTrans=false;
-let glowTransStart=0;
-let glowTransDur=0;
-let glowFrom=0;
-let glowTo=0;
+let glowMode       = "low";
+let glowVal        = 0.4;
+let glowStart      = 0;
+let glowDur        = 10;
+let glowOsc        = 0;
+let glowTrans      = false;
+let glowTransStart = 0;
+let glowTransDur   = 0;
+let glowFrom       = 0;
+let glowTo         = 0;
+
+const LOW_MIN  = 0.31, LOW_MAX  = 0.53;
+const HIGH_MIN = 0.75, HIGH_MAX = 1.0;
 
 /* Aleta */
-let finSpeed=1.3;       // velocidad real suavizada
-let finSpeedTarget=1.3; // objetivo
-const FIN_LERP=1.2;
-
-/* Rotación del cuerpo */
-let bodyRot=0;
-let bodyRotTarget=0;
-const ROT_LERP=1.5;
+let finSpeed       = 1.0;
+let finSpeedTarget = 1.0;
+const FIN_LERP     = 1.2;
 
 /* -----------------------------
    UTILIDADES
 --------------------------------*/
-function rand(a,b){return a+Math.random()*(b-a);}
-function clamp01(v){return Math.max(0.2,Math.min(0.8,v));}
-function ease(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+function rand(a,b){ return a + Math.random()*(b-a); }
+function clamp01(v){ return Math.max(0.2, Math.min(0.8, v)); }
+function ease(t){ return t<0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2; }
 
 /* -----------------------------
-   INICIAR ESTADOS
+   INICIO DE ESTADO
 --------------------------------*/
 function initState(){
-  glowDur=rand(7,17);
+  glowDur   = rand(7,17);
+  glowStart = time;
+  glowMode  = "low";
+  glowVal   = 0.4;
+  glowOsc   = 0;
 
-  leftTarget=rand(0.1,0.3);
-  rightTarget=rand(0.83,0.93);
+  xPos        = 0.3;
+  horiz       = "drift";
+  leftTarget  = rand(0.10, 0.30);
+  rightTarget = rand(0.83, 0.93);
+  swimStart   = rightTarget;
+  swimEnd     = leftTarget;
+  swimDur     = rand(8,14);
+  swimT       = 0;
 
-  swimStart=rightTarget;
-  swimEnd=leftTarget;
-  swimDur=rand(8,14);
-  swimT=0;
+  yPos       = 0.5;
+  yStart     = 0.5;
+  yEnd       = 0.5;
+  yState     = "rest";
+  yTimer     = 0;
+  yDur       = rand(5,7);
 
-  yPos=0.5;
-  yStart=0.5;
-  yEnd=0.5;
-  yState="rest";
-  yDur=rand(5,7);
+  tailFreq       = TAIL_SLOW;
+  tailFreqTarget = TAIL_SLOW;
+  tailScale      = 1;
 
-  finSpeed=1.3;
-  finSpeedTarget=1.3;
+  finSpeed       = 1.0;
+  finSpeedTarget = 1.0;
 }
 
 /* -----------------------------
-   INICIO LOOP
+   LOOP PRINCIPAL
 --------------------------------*/
 function start(){ requestAnimationFrame(loop); }
 
 function loop(ts){
-  if(!last) last=ts;
-  const dt=(ts-last)/1000;
-  last=ts;
-  time+=dt;
+  if(!last) last = ts;
+  const dt = (ts - last) / 1000;
+  last = ts;
+  time += dt;
 
   updateHorizontal(dt);
   updateVertical(dt);
   updateTail(dt);
   updateGlow(dt);
   updateFin(dt);
-  updateBodyRotation(dt);
 
   drawFish();
   updateFishWrapper();
@@ -194,71 +213,70 @@ function loop(ts){
 /* -----------------------------
    HORIZONTAL
 --------------------------------*/
-const DRIFT=0.02;
+const DRIFT_SPEED = 0.02;
 
 function updateHorizontal(dt){
-  if(horiz==="drift"){
-    xPos+=DRIFT*dt;
+  if (horiz === "drift") {
+    xPos += DRIFT_SPEED * dt;
 
-    /* cuerpo ligeramente inclinado hacia abajo */
-    bodyRotTarget=0.04;
+    if (xPos >= rightTarget) {
+      xPos = rightTarget;
+      horiz = "swim";
+      swimStart = xPos;
+      swimEnd   = leftTarget = rand(0.10, 0.30);
+      swimDur   = rand(8,14);
+      swimT     = 0;
 
-    if(xPos>=rightTarget){
-      xPos=rightTarget;
-      horiz="swim";
-      swimStart=xPos;
-      swimEnd=leftTarget=rand(0.1,0.3);
-      swimDur=rand(8,14);
-      swimT=0;
-      tailFreqTarget=TAIL_FAST;
+      tailFreqTarget = TAIL_FAST;
     }
 
   } else {
+    swimT += dt / swimDur;
+    const p = Math.min(1, swimT);
+    const e = ease(p);
+    xPos = swimStart + (swimEnd - swimStart) * e;
 
-    swimT+=dt/swimDur;
-    const p=Math.min(1,swimT);
-    const e=ease(p);
-    xPos=swimStart+(swimEnd-swimStart)*e;
-
-    /* cuerpo un poco inclinado hacia arriba */
-    bodyRotTarget=-0.06;
-
-    if(p>=1){
-      horiz="drift";
-      rightTarget=rand(0.83,0.93);
-      tailFreqTarget=TAIL_SLOW;
+    if (p >= 1) {
+      horiz = "drift";
+      rightTarget = rand(0.83, 0.93);
+      tailFreqTarget = TAIL_SLOW;
     }
   }
+
+  if (xPos < 0) xPos = 0;
+  if (xPos > 1) xPos = 1;
 }
 
 /* -----------------------------
    VERTICAL
 --------------------------------*/
 function updateVertical(dt){
-  if(yState==="rest"){
-    yTimer+=dt;
-    if(yTimer>=yDur){
-      yState="move";
-      yTimer=0;
-      yDur=rand(2,2.8);
+  if (yState === "rest") {
+    yTimer += dt;
+    if (yTimer >= yDur) {
+      yState = "move";
+      yTimer = 0;
 
-      yStart=yPos;
+      yDur = rand(2.0, 2.8);
+
+      yStart = yPos;
       let ny;
-      do{ ny=clamp01(rand(0.2,0.8)); }
-      while(Math.abs(ny-yPos)<0.1);
-      yEnd=ny;
+      do { ny = clamp01(rand(0.2,0.8)); }
+      while (Math.abs(ny - yPos) < 0.10);
+      yEnd = ny;
     }
-  } else {
-    yTimer+=dt;
-    let t=Math.min(1,yTimer/yDur);
-    const e=ease(t);
-    yPos=yStart+(yEnd-yStart)*e;
 
-    if(t>=1){
-      yState="rest";
-      yTimer=0;
-      yDur=rand(5,7);
-      yPos=yEnd;
+  } else {
+    yTimer += dt;
+    let t = Math.min(1, yTimer / yDur);
+    const e = ease(t);
+    yPos = yStart + (yEnd - yStart) * e;
+
+    if (t >= 1) {
+      yState = "rest";
+      yTimer = 0;
+      yDur   = rand(5,7);
+      yPos   = yEnd;
     }
   }
 }
@@ -267,130 +285,112 @@ function updateVertical(dt){
    COLA
 --------------------------------*/
 function updateTail(dt){
-  const diff=tailFreqTarget-tailFreq;
-  const step=1.2*dt;
-  if(Math.abs(diff)<=step) tailFreq=tailFreqTarget;
-  else tailFreq+=Math.sign(diff)*step;
+  const diff = tailFreqTarget - tailFreq;
+  const step = 1.2 * dt;
+  if(Math.abs(diff) <= step) tailFreq = tailFreqTarget;
+  else tailFreq += Math.sign(diff)*step;
 
-  tailPhase+=dt*tailFreq;
-  const w=(Math.sin(tailPhase*2*Math.PI)+1)/2;
-  tailScale=0.6+w*0.4;
+  tailPhase += dt * tailFreq;
+  const wave = (Math.sin(tailPhase * 2*Math.PI) + 1) / 2;
+  tailScale = 0.6 + wave * 0.4;
 }
 
 /* -----------------------------
    BRILLO
 --------------------------------*/
-const LOW_MIN=0.31,LOW_MAX=0.53,HIGH_MIN=0.75,HIGH_MAX=1.0;
-
 function updateGlow(dt){
-  if(glowTrans){
-    let t=(time-glowTransStart)/glowTransDur;
-    if(t>1) t=1;
-    const e=ease(t);
-    glowVal=glowFrom+(glowTo-glowFrom)*e;
+  if (glowTrans) {
+    let t = (time - glowTransStart) / glowTransDur;
+    if (t>1) t=1;
+    const e = ease(t);
+    glowVal = glowFrom + (glowTo - glowFrom)*e;
 
-    if(t>=1){
-      glowTrans=false;
-      glowStart=time;
+    if (t>=1) {
+      glowTrans = false;
+      glowStart = time;
+      glowOsc   = 0;
     }
     return;
   }
 
-  glowOsc+=dt/glowDur;
-  if(glowOsc>1) glowOsc-=1;
-  const w=(Math.sin(glowOsc*2*Math.PI)+1)/2;
+  glowOsc += dt / glowDur;
+  if (glowOsc>1) glowOsc -= 1;
+  const w = (Math.sin(glowOsc*2*Math.PI)+1)/2;
 
-  if(glowMode==="low"){
-    glowVal=LOW_MIN+w*(LOW_MAX-LOW_MIN);
+  if (glowMode==="low") {
+    glowVal = LOW_MIN + w*(LOW_MAX-LOW_MIN);
 
-    if(time-glowStart>=glowDur){
-      glowTrans=true;
-      glowTransStart=time;
-      glowTransDur=rand(0.5,1);
-      glowFrom=glowVal;
-      glowTo=HIGH_MIN;
-      glowMode="high";
-      glowDur=rand(3,5);
+    if (time - glowStart >= glowDur) {
+      glowTrans      = true;
+      glowTransStart = time;
+      glowTransDur   = rand(0.5,1);
+      glowFrom       = glowVal;
+      glowTo         = HIGH_MIN;
+      glowMode       = "high";
+      glowDur        = rand(3,5);
     }
 
   } else {
-    glowVal=HIGH_MIN+w*(HIGH_MAX-HIGH_MIN);
+    glowVal = HIGH_MIN + w*(HIGH_MAX-HIGH_MIN);
 
-    if(time-glowStart>=glowDur){
-      glowTrans=true;
-      glowTransStart=time;
-      glowTransDur=rand(0.5,1);
-      glowFrom=glowVal;
-      glowTo=(LOW_MIN+LOW_MAX)/2;
-      glowMode="low";
-      glowDur=rand(7,17);
+    if (time - glowStart >= glowDur) {
+      glowTrans      = true;
+      glowTransStart = time;
+      glowTransDur   = rand(0.5,1);
+      glowFrom       = glowVal;
+      glowTo         = (LOW_MIN+LOW_MAX)/2;
+      glowMode       = "low";
+      glowDur        = rand(7,17);
     }
   }
 }
 
 /* -----------------------------
-   VELOCIDAD DE ALETA SUAVIZADA + LIMITADA
+   VELOCIDAD DE ALETA SUAVIZADA
 --------------------------------*/
 function updateFin(dt){
+  const noise =
+      Math.sin(time*0.35)*0.10 +
+      Math.sin(time*0.88)*0.05;
 
-  // velocidad objetivo más suave y más lenta
-  const noise=
-      Math.sin(time*0.35)*0.15 +
-      Math.sin(time*0.88)*0.07;
+  const isMoving = (yState === "move");
 
-  const movingBoost=(yState==="move")?1.25:1.0;
+  finSpeedTarget = 1.0 * (isMoving ? 1.15 : 1.0) + noise;
+  finSpeedTarget = Math.max(0.7, Math.min(1.3, finSpeedTarget));
 
-  finSpeedTarget = 1.2 * movingBoost + noise;
-
-  // límite para que nunca sea muy rápida
-  finSpeedTarget = Math.max(0.8, Math.min(1.6, finSpeedTarget));
-
-  // transición suave
-  const diff=finSpeedTarget-finSpeed;
-  const step=FIN_LERP*dt;
+  const diff = finSpeedTarget - finSpeed;
+  const step = FIN_LERP * dt;
   if(Math.abs(diff)<=step) finSpeed=finSpeedTarget;
-  else finSpeed+=Math.sign(diff)*step;
+  else finSpeed += Math.sign(diff)*step;
 }
 
 /* -----------------------------
-   ROTACIÓN SUAVE DEL CUERPO
---------------------------------*/
-function updateBodyRotation(dt){
-  const diff=bodyRotTarget-bodyRot;
-  const step=ROT_LERP*dt;
-  if(Math.abs(diff)<=step) bodyRot=bodyRotTarget;
-  else bodyRot+=Math.sign(diff)*step;
-}
-
-/* -----------------------------
-   ACTUALIZAR POSICIÓN EXTERNA
+   POSICIÓN DEL WRAPPER
 --------------------------------*/
 function updateFishWrapper(){
-  const fw=document.getElementById("fish-wrapper");
-
+  const fw = document.getElementById("fish-wrapper");
   const margin=window.innerWidth*0.03;
+
   let minX=margin;
   let maxX=window.innerWidth-fishWidth-margin;
-  if(maxX<minX){ minX=maxX=(window.innerWidth-fishWidth)/2; }
+  if(maxX<minX) minX=maxX=(window.innerWidth-fishWidth)/2;
 
   const x=minX+(maxX-minX)*xPos;
-  const h=window.innerHeight-fishHeight;
-  const y=h*yPos;
+  const usableH=window.innerHeight-fishHeight;
+  const y=usableH*yPos;
 
   fw.style.left=x+"px";
   fw.style.top=y+"px";
-
-  fw.style.transform=`rotate(${bodyRot}rad)`;
 }
 
 /* -----------------------------
    DIBUJAR PEZ COMPLETO
 --------------------------------*/
 function drawFish(){
+  if(!ctx) return;
   ctx.clearRect(0,0,fishWidth,fishHeight);
 
-  const srcW=pez.width;
-  const srcH=pez.height;
+  const srcW=pez.width, srcH=pez.height;
 
   const split=0.6;
   const srcMid=srcW*split;
@@ -399,61 +399,58 @@ function drawFish(){
   const dstMid=fishWidth*split;
   const dstTail=fishWidth-dstMid;
 
+  // Cuerpo
   ctx.drawImage(pez,0,0,srcMid,srcH,0,0,dstMid,fishHeight);
 
+  // Cola segmentada
   const seg=14;
   const base=dstTail/seg;
 
-  let sx=dstMid;
+  let x=dstMid;
   for(let i=0;i<seg;i++){
-    const u=i/seg;
-    const u2=(i+1)/seg;
-
-    const s0=srcMid+srcTail*u;
-    const sw=srcTail*(u2-u);
-
-    const fade=Math.pow(u,1.8);
+    const u0=i/seg, u1=(i+1)/seg;
+    const s0=srcMid+srcTail*u0;
+    const sw=srcTail*(u1-u0);
+    const fade=Math.pow(u0,1.8);
     const sc=1+(tailScale-1)*fade;
     const dw=base*sc;
 
-    ctx.drawImage(pez,s0,0,sw,srcH,sx,0,dw,fishHeight);
-    sx+=dw;
+    ctx.drawImage(pez,s0,0,sw,srcH,x,0,dw,fishHeight);
+    x+=dw;
   }
 
-  /* BRILLO */
+  /* Brillo */
   ctx.save();
   ctx.globalAlpha=glowVal;
 
   ctx.drawImage(brillo,0,0,srcMid,srcH,0,0,dstMid,fishHeight);
 
-  sx=dstMid;
+  x=dstMid;
   for(let i=0;i<seg;i++){
-    const u=i/seg;
-    const u2=(i+1)/seg;
-    const s0=srcMid+srcTail*u;
-    const sw=srcTail*(u2-u);
-    const fade=Math.pow(u,1.8);
+    const u0=i/seg,u1=(i+1)/seg;
+    const s0=srcMid+srcTail*u0;
+    const sw=srcTail*(u1-u0);
+    const fade=Math.pow(u0,1.8);
     const sc=1+(tailScale-1)*fade;
     const dw=base*sc;
-    ctx.drawImage(brillo,s0,0,sw,srcH,sx,0,dw,fishHeight);
-    sx+=dw;
+
+    ctx.drawImage(brillo,s0,0,sw,srcH,x,0,dw,fishHeight);
+    x+=dw;
   }
   ctx.restore();
 
-  /* ALETA (más lenta y suave) */
+  /* Aleta */
   ctx.save();
 
   const aw=aleta.width*scaleFactor;
   const ah=aleta.height*scaleFactor;
 
   const left=fishWidth*0.26;
-  const top=fishHeight*0.57;
-  const px=left;
-  const py=top+ah*0.5;
+  const top =fishHeight*0.57;
 
-  ctx.translate(px,py);
+  ctx.translate(left, top + ah*0.5);
 
-  const angle=Math.sin(time*finSpeed)*0.28;
+  const angle=Math.sin(time * finSpeed) * 0.26;
   ctx.rotate(angle);
 
   ctx.drawImage(aleta,0,-ah*0.5,aw,ah);
@@ -461,6 +458,5 @@ function drawFish(){
   ctx.restore();
 }
 </script>
-
 </body>
 </html>
